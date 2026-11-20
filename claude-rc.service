@@ -7,7 +7,13 @@ Type=simple
 # Sessions spawned from claude.ai/code or the mobile app work in this directory.
 WorkingDirectory=%h/projects
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=%h/.local/bin/claude remote-control
+# The persistent session is named "<hostname>-concierge".
+Environment=CLAUDE_RC_NAME=%H-concierge
+# Optional: CLAUDE_RC_SESSION_ID=<id> pins the server to one fixed session.
+EnvironmentFile=-%h/.config/claude-rc/env
+# Reattaches to the previous session (--continue) and only falls back to a
+# fresh one when there is nothing to continue; see the script.
+ExecStart=%h/projects/claude-rc/claude-rc-start
 # stdout is a status line redrawn every second; keep it out of the journal.
 StandardOutput=null
 StandardError=journal

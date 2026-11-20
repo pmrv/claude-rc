@@ -1,0 +1,35 @@
+#!/bin/sh
+# Start `claude remote-control` on one long-lived session named
+# "<hostname>-concierge", reattaching to it where possible instead of
+# creating a new session on every (re)start.
+#
+#   1. CLAUDE_RC_SESSION_ID set  -> reattach to exactly that session.
+#   2. otherwise                 -> `--continue` (the session last recorded for
+#                                   this directory, if recent enough).
+#   3. nothing to continue       -> fresh server with a new session.
+
+CLAUDE=${CLAUDE:-$HOME/.local/bin/claude}
+NAME=${CLAUDE_RC_NAME:-$(uname -n)-concierge}
+# A --continue that dies sooner than this is taken to mean "nothing recorded".
+QUICK_FAIL_SECS=60
+# Exit status claude uses when the API is unreachable (EX_UNAVAILABLE).
+EX_UNAVAILABLE=69
+
+if [ -n "${CLAUDE_RC_SESSION_ID:-}" ]; then
+    exec "$CLAUDE" remote-control --session-id "$CLAUDE_RC_SESSION_ID"
+fi
+
+start=$(date +%s)
+"$CLAUDE" remote-control --continue --name "$NAME"
+rc=$?
+elapsed=$(( $(date +%s) - start ))
+
+# Network down, or the server ran for a while before dying: hand the failure
+# to systemd so the restart tries --continue again rather than orphaning the
+# session.
+if [ "$rc" -eq "$EX_UNAVAILABLE" ] || [ "$elapsed" -ge "$QUICK_FAIL_SECS" ]; then
+    exit "$rc"
+fi
+
+echo "claude-rc: --continue exited $rc after ${elapsed}s; starting a fresh session" >&2
+exec "$CLAUDE" remote-control --name "$NAME"
